@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mr.Cleaner — CSV Cleaner</title>
+
+    <!-- Bootstrap CSS -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous"
+    />
+
+    <!-- Bootstrap Icons (for small touches) -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+        rel="stylesheet"
+    />
+
+    <!-- PapaParse for reliable CSV parsing/unparsing -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <!-- Favicon (optional nice touch) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2212%22 font-size=%2212%22>🧽</text></svg>">
+
+    <!-- No custom CSS. Only Bootstrap and minimal inline styles where unavoidable. -->
+</head>
+<body class="bg-body">
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg bg-dark border-bottom border-primary-subtle sticky-top shadow-sm">
+        <div class="container-xxl">
+            <a class="navbar-brand fw-bold text-primary" href="#">
+                <i class="bi bi-stars me-2"></i>Mr.Cleaner
+            </a>
+
+            <button
+                class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#topNav"
+                aria-controls="topNav"
+                aria-expanded="false"
+                aria-label="Toggle navigation"
+            >
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div id="topNav" class="collapse navbar-collapse">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <span class="nav-link disabled">CSV Cleaner</span>
+                    </li>
+                </ul>
+
+                <div class="d-flex gap-2">
+                    <button id="undoButton" class="btn btn-outline-secondary btn-sm" disabled>
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
+                    </button>
+                    <button id="downloadButton" class="btn btn-success btn-sm">
+                        <i class="bi bi-download me-1"></i>Download CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="container-xxl py-4">
+        <div class="row g-4 align-items-stretch">
+            <!-- LEFT: Controls (40%) -->
+            <section class="col-12 col-lg-5">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h5 class="mb-0">
+                            <i class="bi bi-magic me-2"></i>Your Cleaning Workflow
+                        </h5>
+                        <span class="badge text-bg-primary">Live</span>
+                    </div>
+                    <div class="card-body d-flex flex-column gap-3">
+
+                        <!-- File Upload -->
+                        <div>
+                            <label for="fileInput" class="form-label fw-semibold">Upload a CSV file</label>
+                            <input class="form-control" type="file" id="fileInput" accept=".csv,text/csv" />
+                            <div class="form-text">We parse using Papa Parse — quotes, commas, newlines handled correctly.</div>
+                        </div>
+
+                        <!-- Transform Builder -->
+                        <div class="border rounded p-3 bg-body-tertiary">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-tools me-2"></i>Apply a Transformation
+                                </h6>
+                                <span class="text-secondary small">No-code</span>
+                            </div>
+
+                            <div class="mt-3">
+                                <label for="transformSelect" class="form-label">Select an Operation</label>
+                                <select id="transformSelect" class="form-select">
+                                    <option value="">— Choose an operation —</option>
+                                    <option value="drop_columns">Drop Columns</option>
+                                    <option value="deduplication">Remove Duplicates</option>
+                                    <option value="trim_whitespaces">Trim Whitespace</option>
+                                    <option value="change_dtypes">Change Data Type</option>
+                                    <option value="change_case">Change String Case</option>
+                                    <option value="rename_columns">Rename Column</option>
+                                    <option value="handle_missing_values">Handle Missing Values</option>
+                                    <option value="add_column">Add New Column</option>
+                                </select>
+                            </div>
+
+                            <!-- Dynamic Inputs -->
+                            <div id="dynamicInputs" class="mt-3"></div>
+
+                            <div class="d-grid mt-3">
+                                <button id="applyTransformButton" class="btn btn-primary">
+                                    <i class="bi bi-play-circle me-2"></i>Apply Transformation
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Logs -->
+                        <div>
+                            <label class="form-label fw-semibold mb-2">Activity Log</label>
+                            <div id="logArea" class="border rounded bg-body-tertiary p-2 small overflow-auto"
+                                style="height: 8rem;">
+                                <div>[INFO] Ready to start. Upload a file to begin.</div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="card-footer text-body-secondary small d-flex justify-content-between">
+                        <span><i class="bi bi-shield-check me-1"></i>Client-side only. Your data stays in the browser.</span>
+                        <span id="rowCountHint" class="text-secondary"></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT: Preview (60%) -->
+            <section class="col-12 col-lg-7">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h5 class="mb-0">
+                            <i class="bi bi-table me-2"></i>Live Data Preview
+                        </h5>
+                        <span id="previewInfo" class="small text-secondary"></span>
+                    </div>
+
+                    <div class="card-body">
+                        <div id="dataPreview"
+                            class="border rounded bg-body-tertiary overflow-auto"
+                            style="height: 30rem;">
+                            <div class="p-3 text-secondary">No data to display yet.</div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer d-flex align-items-center justify-content-between small text-body-secondary">
+                        <span><i class="bi bi-info-circle me-1"></i>Showing first 10 rows for preview.</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <div id="busySpinner" class="spinner-border spinner-border-sm text-primary d-none" role="status" aria-hidden="true"></div>
+                            <span id="statusText" class="text-secondary"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Toast (bottom center) -->
+    <div class="position-fixed bottom-0 start-50 translate-middle-x p-3" style="z-index: 1080;">
+        <div id="appToast" class="toast align-items-center text-bg-dark border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div id="toastMsg" class="toast-body">
+                    Transformation applied successfully!
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        xintegrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+        crossorigin="anonymous"
+    ></script>
+
+    <script>
+        // ======= State =======
+        let originalData = [];   // array of objects from Papa.parse
+        let cleanedData = [];    // working copy
+        let dataHistory = [];    // stack of JSON strings for undo
+        let allHeaders = [];     // New state to hold all headers
+
+        // ======= DOM =======
+        const fileInput = document.getElementById('fileInput');
+        const applyTransformButton = document.getElementById('applyTransformButton');
+        const downloadButton = document.getElementById('downloadButton');
+        const undoButton = document.getElementById('undoButton');
+        const dataPreview = document.getElementById('dataPreview');
+        const logArea = document.getElementById('logArea');
+        const transformSelect = document.getElementById('transformSelect');
+        const dynamicInputs = document.getElementById('dynamicInputs');
+        const previewInfo = document.getElementById('previewInfo');
+        const busySpinner = document.getElementById('busySpinner');
+        const statusText = document.getElementById('statusText');
+        const rowCountHint = document.getElementById('rowCountHint');
+
+        const toastEl = document.getElementById('appToast');
+        const toastMsg = document.getElementById('toastMsg');
+        const toast = new bootstrap.Toast(toastEl, { delay: 1600 });
+
+        // ======= Helpers =======
+        const setBusy = (on, text = '') => {
+            busySpinner.classList.toggle('d-none', !on);
+            statusText.textContent = text || '';
+        };
+
+        const showToast = (message) => {
+            toastMsg.textContent = message;
+            toast.show();
+        };
+
+        const log = (message, type = 'info') => {
+            const entry = document.createElement('div');
+            entry.textContent = `[${type.toUpperCase()}] ${message}`;
+            if (type === 'error') entry.classList.add('text-danger');
+            if (type === 'success') entry.classList.add('text-success');
+            logArea.appendChild(entry);
+            logArea.scrollTop = logArea.scrollHeight;
+        };
+
+        const updateUndoButton = () => {
+            undoButton.disabled = dataHistory.length === 0;
+        };
+
+        const deepCopy = (obj) => JSON.parse(JSON.stringify(obj));
+
+        const renderTable = (data, targetEl) => {
+            if (!data || data.length === 0) {
+                targetEl.innerHTML = '<div class="p-3 text-secondary">No data to display.</div>';
+                previewInfo.textContent = '';
+                return;
+            }
+
+            const previewData = data.slice(0, 10);
+            const headers = Object.keys(previewData[0] || {});
+            let html = `
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped table-hover align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>${headers.map(h => `<th scope="col">${escapeHtml(h)}</th>`).join('')}</tr>
+                        </thead>
+                        <tbody>
+            `;
+            previewData.forEach(row => {
+                html += `<tr>${headers.map(h => `<td>${escapeHtml(row[h])}</td>`).join('')}</tr>`;
+            });
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            targetEl.innerHTML = html;
+            previewInfo.textContent = `Previewing ${previewData.length} of ${data.length} rows.`;
+        };
+
+        const escapeHtml = (v) => {
+            if (v === null || v === undefined) return '';
+            return String(v)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        };
+        
+        // Helper to check for whitespace
+        const hasWhitespace = (data) => {
+            if (!data.length) return false;
+            for (const row of data) {
+                for (const key in row) {
+                    if (typeof row[key] === 'string' && row[key] !== row[key].trim()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        
+        // Helper to check for duplicates
+        const hasDuplicates = (data) => {
+            if (!data.length) return false;
+            const uniqueRows = new Set();
+            for (const row of data) {
+                const key = JSON.stringify(row);
+                if (uniqueRows.has(key)) return true;
+                uniqueRows.add(key);
+            }
+            return false;
+        };
+        
+        // ======= Transformation Logic =======
+        const executeTransformations = {
+            drop_columns: (data, params) => {
+                const colsToDrop = params.columns;
+                const newData = data.map(row => {
+                    const newRow = { ...row };
+                    colsToDrop.forEach(col => delete newRow[col]);
+                    return newRow;
+                });
+                showToast(`Dropped columns: ${colsToDrop.join(', ')}`);
+                log(`Dropped columns: ${colsToDrop.join(', ')}`, 'success');
+                return newData;
+            },
+
+            deduplication: (data) => {
+                const rowsBefore = data.length;
+                const unique = new Set();
+                const cleaned = [];
+                data.forEach(row => {
+                    const key = JSON.stringify(row);
+                    if (!unique.has(key)) {
+                        unique.add(key);
+                        cleaned.push(row);
+                    }
+                });
+                const removed = rowsBefore - cleaned.length;
+                showToast(`Removed ${removed} duplicates`);
+                log(`Removed ${removed} duplicate rows.`, 'success');
+                return cleaned;
+            },
+
+            trim_whitespaces: (data, params) => {
+                const targetCols = params.columns;
+                const newData = data.map(row => {
+                    const copy = { ...row };
+                    targetCols.forEach(col => {
+                        if (typeof copy[col] === 'string') copy[col] = copy[col].trim();
+                    });
+                    return copy;
+                });
+                showToast('Trimmed whitespace');
+                log(`Trimmed whitespace in: ${targetCols.join(', ')}`, 'success');
+                return newData;
+            },
+            
+            change_case: (data, params) => {
+                const { column: col, caseType } = params;
+                const newData = data.map(row => {
+                    const copy = { ...row };
+                    if (col in copy && typeof copy[col] === 'string') {
+                        switch (caseType) {
+                            case 'uppercase':
+                                copy[col] = copy[col].toUpperCase();
+                                break;
+                            case 'lowercase':
+                                copy[col] = copy[col].toLowerCase();
+                                break;
+                            case 'capitalize':
+                                copy[col] = copy[col].toLowerCase().replace(/(?:^|\s)\S/g, function(a) { return a.toUpperCase(); });
+                                break;
+                        }
+                    }
+                    return copy;
+                });
+                showToast(`Changed case of '${col}' to ${caseType}`);
+                log(`Changed case of '${col}' to '${caseType}'.`, 'success');
+                return newData;
+            },
+
+            change_dtypes: (data, params) => {
+                const col = params.column;
+                const dtype = params.dtype;
+                const newData = data.map(row => {
+                    const copy = { ...row };
+                    if (col in copy) {
+                        switch (dtype) {
+                            case 'string':
+                                copy[col] = (copy[col] ?? '').toString();
+                                break;
+                            case 'number':
+                                const n = parseFloat(copy[col]);
+                                copy[col] = isNaN(n) ? null : n;
+                                break;
+                            case 'integer':
+                                const i = parseInt(copy[col], 10);
+                                copy[col] = isNaN(i) ? null : i;
+                                break;
+                            case 'boolean':
+                                const lowerVal = String(copy[col]).toLowerCase().trim();
+                                if (['true', 'yes', '1', 't', 'y'].includes(lowerVal)) {
+                                    copy[col] = true;
+                                } else if (['false', 'no', '0', 'f', 'n', ''].includes(lowerVal)) {
+                                    copy[col] = false;
+                                } else {
+                                    copy[col] = null;
+                                }
+                                break;
+                            case 'date':
+                                const date = new Date(copy[col]);
+                                copy[col] = isNaN(date.getTime()) ? null : date.toISOString();
+                                break;
+                        }
+                    }
+                    return copy;
+                });
+                showToast(`Changed '${col}' to ${dtype}`);
+                log(`Changed dtype of '${col}' to '${dtype}'.`, 'success');
+                return newData;
+            },
+
+            rename_columns: (data, params) => {
+                const { oldName, newName } = params;
+                const newData = data.map(row => {
+                    if (!(oldName in row)) return { ...row };
+                    const { [oldName]: val, ...rest } = row;
+                    return { ...rest, [newName]: val };
+                });
+                showToast(`Renamed '${params.oldName}' → '${params.newName}'`);
+                log(`Renamed column '${params.oldName}' to '${params.newName}'.`, 'success');
+                return newData;
+            },
+
+            handle_missing_values: (data, params) => {
+                const { column: col, strategy, fillValue } = params;
+                let out = data;
+
+                if (strategy === 'drop') {
+                    out = data.filter(row => row[col] !== null && row[col] !== undefined && row[col] !== '');
+                    showToast(`Dropped rows with missing in '${col}'`);
+                    log(`Dropped rows with missing in '${col}'.`, 'success');
+                } else if (strategy === 'fill_value') {
+                    out = data.map(row => {
+                        const copy = { ...row };
+                        if (copy[col] === null || copy[col] === undefined || copy[col] === '') {
+                            copy[col] = fillValue;
+                        }
+                        return copy;
+                    });
+                    showToast(`Filled missing in '${col}'`);
+                    log(`Filled missing values in '${col}' with value '${fillValue}'.`, 'success');
+                } else if (strategy === 'mean') {
+                    const nums = data
+                        .map(r => parseFloat(r[col]))
+                        .filter(v => !isNaN(v));
+                    const mean = nums.length
+                        ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100
+                        : 0;
+
+                    out = data.map(row => {
+                        const copy = { ...row };
+                        const n = parseFloat(copy[col]);
+                        if (isNaN(n)) copy[col] = mean;
+                        return copy;
+                    });
+                    showToast(`Filled missing in '${col}' with mean`);
+                    log(`Filled missing in '${col}' with mean (${mean.toFixed(2)}).`, 'success');
+                }
+                return out;
+            },
+            
+            add_column: (data, params) => {
+                const { newName, formula } = params;
+                
+                // A simple, but not fully secure way to evaluate a formula.
+                // For a production app, a more robust and secure parser would be needed.
+                const evalFn = new Function('row', 'return ' + formula);
+                
+                const newData = data.map(row => {
+                    const newRow = { ...row };
+                    try {
+                        const calculatedValue = evalFn(newRow);
+                        newRow[newName] = calculatedValue;
+                    } catch (e) {
+                        log(`Error evaluating formula for row: ${e.message}`, 'error');
+                        newRow[newName] = 'Error';
+                    }
+                    return newRow;
+                });
+                showToast(`Added new column: '${newName}'`);
+                log(`Added new column '${newName}' using formula: '${formula}'.`, 'success');
+                return newData;
+            }
+        };
+
+        // ======= Dynamic Inputs =======
+        const createDynamicInputs = (type) => {
+            dynamicInputs.innerHTML = '';
+            if (!type) return;
+
+            const wrap = (inner) => `<div class="row g-3">${inner}</div>`;
+            const field = (label, html) => `
+                <div class="col-12">
+                    <label class="form-label">${label}</label>
+                    ${html}
+                </div>
+            `;
+            const columnOptionsHtml = allHeaders.map(h => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join('');
+
+            switch (type) {
+                case 'drop_columns':
+                case 'trim_whitespaces':
+                    dynamicInputs.innerHTML = wrap(
+                        field('Column(s)',
+                            `<select id="columnsInput" class="form-select" multiple size="5">
+                                <option value="all">All columns</option>
+                                ${columnOptionsHtml}
+                            </select>`)
+                    );
+                    break;
+                
+                case 'change_case':
+                    dynamicInputs.innerHTML = wrap(
+                        field('Column Name',
+                            `<select id="columnInput" class="form-select">
+                                <option value="">— Select a column —</option>
+                                ${columnOptionsHtml}
+                            </select>`) +
+                        field('Case Type',
+                            `<select id="caseSelect" class="form-select">
+                                <option value="uppercase">Uppercase</option>
+                                <option value="lowercase">Lowercase</option>
+                                <option value="capitalize">Capitalize</option>
+                            </select>`)
+                    );
+                    break;
+
+                case 'change_dtypes':
+                    dynamicInputs.innerHTML = wrap(
+                        field('Column Name',
+                            `<select id="columnInput" class="form-select">
+                                <option value="">— Select a column —</option>
+                                ${columnOptionsHtml}
+                            </select>`) +
+                        `<div id="dtypeInputs" class="col-12 mt-3"></div>`
+                    );
+                    const columnSelect = document.getElementById('columnInput');
+                    columnSelect.addEventListener('change', (e) => renderDtypeDropdown(e.target.value));
+                    break;
+
+                case 'rename_columns':
+                    dynamicInputs.innerHTML = wrap(
+                        field('Old Column Name',
+                            `<select id="oldNameInput" class="form-select">
+                                <option value="">— Select a column —</option>
+                                ${columnOptionsHtml}
+                            </select>`) +
+                        field('New Column Name',
+                            `<input type="text" id="newNameInput" class="form-control" placeholder="e.g., item_price">`)
+                    );
+                    break;
+
+                case 'handle_missing_values':
+                    dynamicInputs.innerHTML = wrap(
+                        field('Column Name',
+                            `<select id="mvColumnInput" class="form-select">
+                                <option value="">— Select a column —</option>
+                                ${columnOptionsHtml}
+                            </select>`) +
+                        field('Strategy',
+                            `<select id="mvStrategySelect" class="form-select">
+                               <option value="drop">Drop Rows</option>
+                               <option value="fill_value">Fill with Value</option>
+                               <option value="mean">Fill with Mean</option>
+                            </select>`) +
+                        `<div class="col-12 d-none" id="fillValueWrap">
+                            <label class="form-label">Fill Value</label>
+                            <input type="text" id="fillValueInput" class="form-control" placeholder="e.g., 0">
+                        </div>`
+                    );
+
+                    // toggle fill value
+                    const mvStrategySelect = document.getElementById('mvStrategySelect');
+                    mvStrategySelect.addEventListener('change', (e) => {
+                        document.getElementById('fillValueWrap').classList.toggle('d-none', e.target.value !== 'fill_value');
+                    });
+                    break;
+                case 'add_column':
+                    dynamicInputs.innerHTML = wrap(
+                        field('New Column Name',
+                             `<input type="text" id="newColumnNameInput" class="form-control" placeholder="e.g., total_price">`) +
+                        field('Formula (using existing column names)',
+                             `<input type="text" id="formulaInput" class="form-control" placeholder="e.g., row['quantity'] * row['price']">`)
+                    );
+                    break;
+            }
+        };
+
+        const renderDtypeDropdown = (column) => {
+            const dtypeInputs = document.getElementById('dtypeInputs');
+            if (!column || !cleanedData.length) {
+                dtypeInputs.innerHTML = '';
+                return;
+            }
+
+            const sampleValues = cleanedData.map(row => row[column]).slice(0, 50);
+            const canBe = analyzeColumn(sampleValues);
+
+            let optionsHtml = '';
+            const dtypes = [
+                { value: 'string', label: 'String' },
+                { value: 'number', label: 'Number (float)' },
+                { value: 'integer', label: 'Integer' },
+                { value: 'boolean', label: 'Boolean' },
+                { value: 'date', label: 'Date' }
+            ];
+
+            optionsHtml = dtypes.map(dt => {
+                const isDisabled = dt.value !== 'string' && !canBe[dt.value];
+                return `<option value="${dt.value}" ${isDisabled ? 'disabled' : ''}>${dt.label}</option>`;
+            }).join('');
+
+            dtypeInputs.innerHTML = `
+                <label class="form-label">New Data Type</label>
+                <select id="dtypeSelect" class="form-select">
+                    ${optionsHtml}
+                </select>
+            `;
+        };
+        
+        const analyzeColumn = (values) => {
+            const results = {
+                string: false, // always possible
+                number: true,
+                integer: true,
+                boolean: true,
+                date: true
+            };
+
+            for (const value of values) {
+                if (value === null || value === undefined || value === '') continue;
+
+                // Check for Number/Integer
+                if (results.number && isNaN(parseFloat(value))) {
+                    results.number = false;
+                    results.integer = false;
+                }
+                if (results.integer && (parseFloat(value) !== parseInt(value, 10))) {
+                    results.integer = false;
+                }
+
+                // Check for Boolean
+                const lowerValue = String(value).toLowerCase().trim();
+                if (results.boolean && !['true', 'yes', '1', 't', 'y', 'false', 'no', '0', 'f', 'n'].includes(lowerValue)) {
+                    results.boolean = false;
+                }
+                
+                // Check for Date
+                if (results.date && isNaN(new Date(value).getTime())) {
+                    results.date = false;
+                }
+
+                // If all are false, we can stop early
+                if (!results.number && !results.boolean && !results.date) {
+                    break;
+                }
+            }
+            return results;
+        };
+
+        transformSelect.addEventListener('change', (e) => createDynamicInputs(e.target.value));
+
+        // ======= File Upload =======
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                log('Please select a .csv file.', 'error');
+                showToast('Invalid file type.');
+                return;
+            }
+
+            setBusy(true, 'Parsing CSV...');
+            log('File selected. Reading data...', 'info');
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: 'greedy',
+                transformHeader: h => h.trim(),
+                complete: (results) => {
+                    setBusy(false);
+                    if (results.errors?.length) {
+                        log(`Parse warnings: ${results.errors.length}`, 'error');
+                    }
+                    originalData = results.data || [];
+                    cleanedData = deepCopy(originalData);
+                    dataHistory = [JSON.stringify(cleanedData)];
+                    allHeaders = Object.keys(cleanedData[0] || {});
+
+                    const rows = cleanedData.length;
+                    rowCountHint.textContent = rows ? `${rows.toLocaleString()} rows loaded` : '';
+                    log(`Successfully loaded ${rows} rows.`, 'success');
+                    renderTable(cleanedData, dataPreview);
+                    updateUndoButton();
+                    // Re-render dynamic inputs with new headers
+                    createDynamicInputs(transformSelect.value);
+                    
+                    // Display intelligent tips and summary
+                    log(`Dataset has ${rows} rows and ${allHeaders.length} columns.`, 'info');
+                    if (hasDuplicates(cleanedData)) {
+                        log('Tips: It looks like your dataset contains duplicate rows. You might want to use "Remove Duplicates".', 'info');
+                    }
+                    if (hasWhitespace(cleanedData)) {
+                        log('Tips: We detected leading or trailing whitespace in some cells. The "Trim Whitespace" transformation could help!', 'info');
+                    }
+
+                },
+                error: (err) => {
+                    setBusy(false);
+                    log(`Error parsing CSV: ${err?.message || err}`, 'error');
+                    showToast('Failed to parse CSV.');
+                }
+            });
+        });
+
+        // ======= Apply Transformation =======
+        applyTransformButton.addEventListener('click', () => {
+            if (!cleanedData.length) {
+                log('Please upload a file first.', 'error');
+                showToast('Upload a CSV to begin.');
+                return;
+            }
+
+            const type = transformSelect.value;
+            if (!type) {
+                log('Please select a transformation.', 'error');
+                return;
+            }
+
+            const params = {};
+            try {
+                switch (type) {
+                    case 'drop_columns':
+                    case 'trim_whitespaces': {
+                        const selectEl = document.getElementById('columnsInput');
+                        if (!selectEl) return;
+                        if (selectEl.value === 'all') {
+                            params.columns = allHeaders;
+                        } else {
+                            params.columns = Array.from(selectEl.selectedOptions).map(opt => opt.value);
+                            if (!params.columns.length) {
+                                log('Please select at least one column.', 'error');
+                                return;
+                            }
+                        }
+                        break;
+                    }
+                    case 'change_case': {
+                        params.column = document.getElementById('columnInput')?.value;
+                        params.caseType = document.getElementById('caseSelect')?.value;
+                        if (!params.column) {
+                            log('Please select a column.', 'error');
+                            return;
+                        }
+                        if (!params.caseType) {
+                            log('Please select a case type.', 'error');
+                            return;
+                        }
+                        break;
+                    }
+                    case 'change_dtypes': {
+                        params.column = document.getElementById('columnInput')?.value;
+                        params.dtype = document.getElementById('dtypeSelect')?.value;
+                        if (!params.column) {
+                            log('Please select a column.', 'error');
+                            return;
+                        }
+                        if (!params.dtype) {
+                            log('Please select a data type.', 'error');
+                            return;
+                        }
+                        if (document.getElementById('dtypeSelect')?.selectedOptions[0]?.disabled) {
+                            log('Cannot convert to the selected data type.', 'error');
+                            showToast('Conversion not possible.');
+                            return;
+                        }
+                        break;
+                    }
+                    case 'rename_columns': {
+                        params.oldName = document.getElementById('oldNameInput')?.value;
+                        params.newName = document.getElementById('newNameInput')?.value?.trim();
+                        if (!params.oldName || !params.newName) {
+                            log('Please enter both old and new names.', 'error');
+                            return;
+                        }
+                        break;
+                    }
+                    case 'handle_missing_values': {
+                        params.column = document.getElementById('mvColumnInput')?.value;
+                        params.strategy = document.getElementById('mvStrategySelect')?.value;
+                        if (!params.column) {
+                            log('Please select a column.', 'error');
+                            return;
+                        }
+                        if (params.strategy === 'fill_value') {
+                            params.fillValue = document.getElementById('fillValueInput')?.value ?? '';
+                            if (params.fillValue === '') {
+                                log('Please enter a fill value.', 'error');
+                                return;
+                            }
+                        }
+                        break;
+                    }
+                    case 'deduplication':
+                        // no params
+                        break;
+                    case 'add_column': {
+                        params.newName = document.getElementById('newColumnNameInput')?.value?.trim();
+                        params.formula = document.getElementById('formulaInput')?.value?.trim();
+                        if (!params.newName || !params.formula) {
+                            log('Please provide a column name and formula.', 'error');
+                            return;
+                        }
+                        break;
+                    }
+                }
+            } catch (e) {
+                log(`Error reading inputs: ${e.message}`, 'error');
+                return;
+            }
+
+            try {
+                setBusy(true, 'Applying transformation...');
+                const fn = executeTransformations[type];
+                if (!fn) {
+                    log(`Unknown transformation: ${type}`, 'error');
+                    setBusy(false);
+                    return;
+                }
+                dataHistory.push(JSON.stringify(cleanedData)); // push current for undo
+                cleanedData = fn(cleanedData, params);
+                renderTable(cleanedData, dataPreview);
+                updateUndoButton();
+                setBusy(false, 'Done');
+            } catch (e) {
+                setBusy(false);
+                log(`Error applying transformation: ${e.message}`, 'error');
+                showToast('Transformation failed.');
+            }
+        });
+
+        // ======= Undo =======
+        undoButton.addEventListener('click', () => {
+            if (dataHistory.length === 0) {
+                log('No steps to undo.', 'info');
+                return;
+            }
+            const previous = JSON.parse(dataHistory.pop());
+            cleanedData = previous;
+            renderTable(cleanedData, dataPreview);
+            updateUndoButton();
+            log('Undid last transformation.', 'info');
+            showToast('Undo successful');
+        });
+
+        // ======= Download =======
+        downloadButton.addEventListener('click', () => {
+            if (!cleanedData.length) {
+                log('No data to download.', 'error');
+                showToast('Nothing to download.');
+                return;
+            }
+            log('Preparing CSV for download...', 'info');
+            try {
+                const csv = Papa.unparse(cleanedData, { quotes: true });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'cleaned_data.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                log('CSV file downloaded.', 'success');
+                showToast('Download started');
+            } catch (e) {
+                log(`Failed to create CSV: ${e.message}`, 'error');
+                showToast('Download failed');
+            }
+        });
+    </script>
+</body>
+</html>
